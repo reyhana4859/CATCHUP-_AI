@@ -6,7 +6,7 @@ function analyzeLocally(text) {
   const normalizedText = text.replace(/\s+(?=[A-Z][A-Za-z0-9 _-]{0,40}:\s)/g, "\n");
   const lines = normalizedText.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   const actionWords = /\b(need to|needs to|must|please|don't forget|dont forget|remember to|deadline|due|finish|complete|send|submit|upload|prepare|review|meet|meeting|call|confirm|follow up|follow-up|blocked|waiting for|urgent|asap|by (monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|today|tonight|\d))/i;
-  const decisionWords = /\b(agreed|decided|decision|final decision|we will|i will|i'll|let's|lets|confirmed|owner is|i can handle|i'll handle|moved to|changed to)\b/i;
+  const decisionWords = /\b(agreed|decided|decision|final decision|we will|i will|i'll|let's|lets|confirmed|owner is|i can handle|i'll handle|moved to|changed to|correction|actually|rescheduled|postponed|new time|schedule update)\b/i;
   const deadlinePattern = /\b(today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(?::\d{2})?\s?(?:am|pm)|by the end of the day|eod|next week|this week)\b/i;
   const items = [];
   const decisions = [];
