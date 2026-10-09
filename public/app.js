@@ -25,7 +25,7 @@ const sampleDecisions = [
  {title:"Ownership clarified",detail:"Arjun owns backend integration, Maya owns the final presentation, and you are handling the prototype UI.",source:"10:27 Maya · Project Group",kind:"Ownership"},
  {title:"Lab demo time changed",detail:"The final confirmed demo time is 2:30 PM. Meet outside the lab at 2:15 PM.",source:"11:10 Maya · Project Group",kind:"Schedule update"}
 ];
-let state = {items:[], decisions:[], topics:[], recap:"", source:"", view:"briefing", filter:"all", sourceOpen:-1};
+let state = {items:[], decisions:[], topics:[], openQuestions:[], recap:"", source:"", view:"briefing", filter:"all", sourceOpen:-1};
 const $ = id => document.getElementById(id);
 function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function localAnalyze(text){
@@ -58,7 +58,7 @@ function localAnalyze(text){
 function shortTitle(s){s=s.replace(/^[^:]{1,30}:/,"").trim().replace(/[.!?]+$/,"");return s.length>66?s.slice(0,63)+"…":s;}
 function normalizeAI(data,text){
  if(!data||!Array.isArray(data.items)) throw new Error("Unexpected AI response");
- return {items:data.items.map((x,i)=>({id:"ai-"+i,title:String(x.title||"Review message"),detail:String(x.detail||x.title||""),source:String(x.source||""),sender:String(x.sender||"Conversation"),deadline:String(x.deadline||"Not stated"),score:Math.max(0,Math.min(1,Number(x.score)||.5)),priority:String(x.priority||"Action"),done:false})),decisions:Array.isArray(data.decisions)?data.decisions.map(x=>({title:String(x.title||"Decision"),detail:String(x.detail||""),source:String(x.source||""),kind:String(x.kind||"Decision")})):[],topics:Array.isArray(data.topics)?data.topics:[],recap:String(data.recap||"Your conversation has been summarized."),source:text,mode:"ai"};
+ return {items:data.items.map((x,i)=>({id:"ai-"+i,title:String(x.title||"Review message"),detail:String(x.detail||x.title||""),source:String(x.source||""),sender:String(x.sender||"Conversation"),deadline:String(x.deadline||"Not stated"),score:Math.max(0,Math.min(1,Number(x.score)||.5)),priority:String(x.priority||"Action"),done:false})),decisions:Array.isArray(data.decisions)?data.decisions.map(x=>({title:String(x.title||"Decision"),detail:String(x.detail||""),source:String(x.source||""),kind:String(x.kind||"Decision")})):[],openQuestions:Array.isArray(data.openQuestions)?data.openQuestions:[],topics:Array.isArray(data.topics)?data.topics:[],recap:String(data.recap||"Your conversation has been summarized."),source:text,mode:"local"};
 }
 async function analyze(text){
  const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})});
@@ -83,7 +83,7 @@ function render(){
  $("metric-priority").innerHTML=String(urgent||open).padStart(2,"0")+' <small>items</small>';$("metric-decisions").innerHTML=String(state.decisions.length).padStart(2,"0")+' <small>decisions</small>';$("metric-tasks").innerHTML=String(open).padStart(2,"0")+' <small>to-dos</small>';
  $("urgent-count").textContent=urgent||open;$("metric-noise").innerHTML=state.source.length>100?"Filtered <small>signal found</small>":"Low <small>signal found</small>";
  $("priority-list").innerHTML=state.items.slice(0,4).map(renderPriority).join("");$("all-task-list").innerHTML=state.items.filter(x=>state.filter==="all"||(state.filter==="open"&&!x.done)||(state.filter==="done"&&x.done)).map(renderPriority).join("")||'<div class="empty-state">No tasks in this view yet.</div>';
- $("decision-list").innerHTML=state.decisions.slice(0,3).map(renderDecision).join("")||'<div class="empty-state">No decisions detected yet.</div>';$("all-decision-list").innerHTML=state.decisions.map(renderDecision).join("")||'<div class="empty-state">No decisions detected yet.</div>';
+ $("decision-list").innerHTML=state.decisions.slice(0,3).map(renderDecision).join("")||'<div class="empty-state">No decisions detected yet.</div>';$("all-decision-list").innerHTML=state.decisions.map(renderDecision).join("")||'<div class="empty-state">No decisions detected yet.</div>';if($("open-question-list"))$("open-question-list").innerHTML=(state.openQuestions||[]).map(q=>renderDecision({title:q.title,detail:q.detail,source:q.source,kind:"Open question"})).join("")||'<div class="empty-state">No open questions detected.</div>';
  $("topic-list").innerHTML=state.topics.map(t=>`<div class="topic-row"><i class="topic-dot"></i><span>${escapeHtml(t.name)}</span><span>${escapeHtml(t.count)} mentions</span></div>`).join("")||'<div class="topic-row"><i class="topic-dot"></i><span>General conversation</span><span>—</span></div>';
  $("quick-recap").textContent=state.recap;$("hero-summary").textContent=state.items.length+" action signals surfaced from your conversation. Review the source before acting on anything uncertain.";
  $("hero-title").innerHTML=state.items.length?"Your day, <em>back in focus.</em>":"Your day, <em>back in focus.</em>";$("stat-noise").textContent=state.source?Math.min(91,Math.max(42,Math.round(100-(state.items.length/state.source.split(/\n/).filter(Boolean).length)*100)))+"%":"—";
@@ -97,7 +97,7 @@ function setView(view){
  $("crumb").textContent=view==="tasks"?"My action items":view==="decisions"?"Decisions":"Catch-up briefing";
  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
 }
-function loadData(data){state.items=data.items;state.decisions=data.decisions;state.topics=data.topics;state.recap=data.recap;state.source=data.source;render();setView("briefing");$("import-panel").classList.add("hidden");$("hero-title").innerHTML='Your day, <em>back in focus.</em>';}
+function loadData(data){state.items=data.items;state.decisions=data.decisions;state.openQuestions=data.openQuestions||[];state.topics=data.topics;state.recap=data.recap;state.source=data.source;render();setView("briefing");$("import-panel").classList.add("hidden");$("hero-title").innerHTML='Your day, <em>back in focus.</em>';}
 $("load-sample").addEventListener("click",()=>{$("import-panel").classList.remove("hidden");$("conversation-input").focus();});
 $("toggle-import").addEventListener("click",()=>{$("import-panel").classList.toggle("hidden");$("conversation-input").focus()});
 $("close-import").addEventListener("click",()=>$("import-panel").classList.add("hidden"));

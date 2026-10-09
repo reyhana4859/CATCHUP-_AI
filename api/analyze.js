@@ -6,10 +6,12 @@ function analyzeLocally(text) {
   const normalizedText = text.replace(/\s+(?=[A-Z][A-Za-z0-9 _-]{0,40}:\s)/g, "\n");
   const lines = normalizedText.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   const actionWords = /\b(need to|needs to|must|please|don't forget|dont forget|remember to|deadline|due|finish|complete|send|submit|upload|prepare|review|meet|meeting|call|confirm|follow up|follow-up|blocked|waiting for|urgent|asap|by (monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|today|tonight|\d))/i;
-  const decisionWords = /\b(agreed|decided|decision|we will|i will|i'll|let's|lets|confirmed|owner is|i can handle|i'll handle)\b/i;
+  const decisionWords = /\b(agreed|decided|decision|final decision|we will|i will|i'll|let's|lets|confirmed|owner is|i can handle|i'll handle|moved to|changed to)\b/i;
   const deadlinePattern = /\b(today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(?::\d{2})?\s?(?:am|pm)|by the end of the day|eod|next week|this week)\b/i;
   const items = [];
   const decisions = [];
+  const openQuestions = [];
+  const seenDecisions = new Set();
   for (const line of lines) {
     const senderMatch = line.match(/^([^:]{1,50}):\s*/);
     const sender = senderMatch ? senderMatch[1].trim() : "Unknown";
@@ -17,8 +19,11 @@ function analyzeLocally(text) {
     if (!content) continue;
     const hasDeadline = deadlinePattern.test(content);
     const isCompleted = /\b(done|completed|finished|already sent|already uploaded|has been sent|have sent|uploaded successfully|taken care of)\b/i.test(content);
-    const isQuestion = /\?\s*$/.test(content);
+    const isQuestion = /\?\s*$/.test(content) || /^(who|what|when|where|why|how|can|could|would|should|does|do|did|is|are|has|have|will)\b/i.test(content);
     const isAction = actionWords.test(content);
+    if (isQuestion && openQuestions.length < 8) {
+      openQuestions.push({ title: content.length > 90 ? content.slice(0, 87) + "..." : content, detail: content, source: line, sender, status: "Needs an answer" });
+    }
     if (isAction && !isCompleted && !isQuestion && items.length < 8) {
       const urgent = /\b(urgent|asap|immediately|critical|overdue)\b/i.test(content);
       items.push({
@@ -26,18 +31,22 @@ function analyzeLocally(text) {
         detail: content,
         source: line,
         sender,
-        deadline: hasDeadline ? (content.match(deadlinePattern) || ["Not stated"])[0] : "Not stated",
+        deadline: hasDeadline ? ((content.match(/\b(?:by|before|at)\s+\d{1,2}(?::\d{2})?\s?(?:am|pm)\b/i) || content.match(/\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b/i) || content.match(deadlinePattern) || ["Not stated"])[0]) : "Not stated",
         score: urgent ? 0.95 : hasDeadline ? 0.82 : 0.62,
         priority: urgent ? "Urgent" : hasDeadline ? "Action" : "Review"
       });
     }
     if (decisionWords.test(content) && decisions.length < 6) {
-      decisions.push({
-        title: content.length > 90 ? content.slice(0, 87) + "..." : content,
-        detail: content,
-        source: line,
-        kind: /\b(meet|meeting|tomorrow|monday|tuesday|wednesday|thursday|friday|at \d)/i.test(content) ? "Schedule update" : /\b(i will|i'll|i can handle|owner is)\b/i.test(content) ? "Ownership" : "Decision"
-      });
+      const decisionKey = content.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      if (!seenDecisions.has(decisionKey)) {
+        seenDecisions.add(decisionKey);
+        decisions.push({
+          title: content.length > 90 ? content.slice(0, 87) + "..." : content,
+          detail: content,
+          source: line,
+          kind: /\b(meet|meeting|tomorrow|monday|tuesday|wednesday|thursday|friday|at \d|moved to|changed to)\b/i.test(content) ? "Schedule update" : /\b(i will|i'll|i can handle|owner is)\b/i.test(content) ? "Ownership" : "Decision"
+        });
+      }
     }
   }
   const counts = new Map();
@@ -46,11 +55,12 @@ function analyzeLocally(text) {
     if (match) counts.set(match[1].trim(), (counts.get(match[1].trim()) || 0) + 1);
   }
   const topics = [...counts.entries()].sort((a,b) => b[1]-a[1]).slice(0,4).map(([name,count]) => ({name, count}));
-  const recapLines = lines.slice(0, 4).map(s => s.length > 180 ? s.slice(0,177)+"..." : s);
-  const recap = lines.length
-    ? "Rule-based recap (not generative AI): " + recapLines.join(" ") + (lines.length > 4 ? " …" : "")
-    : "No readable messages were found.";
-  return { recap, items, decisions, topics };
+  const recapParts = [];
+  if (decisions.length) recapParts.push("Decisions or updates: " + decisions.slice(0, 2).map(d => d.detail).join(" "));
+  if (items.length) recapParts.push("Pending actions: " + items.slice(0, 2).map(i => i.detail).join(" "));
+  if (openQuestions.length) recapParts.push("Questions needing answers: " + openQuestions.slice(0, 2).map(q => q.detail).join(" "));
+  const recap = recapParts.length ? recapParts.join(" ") : (lines.length ? "No clear actions, decisions, or open questions were detected. Review the source messages for context." : "No readable messages were found.");
+  return { recap, items, decisions, topics, openQuestions };
 }
 
 export default async function (req, res) {
