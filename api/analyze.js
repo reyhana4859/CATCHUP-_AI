@@ -20,11 +20,14 @@ function analyzeLocally(text) {
     const hasDeadline = deadlinePattern.test(content);
     const isCompleted = /\b(done|completed|finished|already sent|already uploaded|has been sent|have sent|uploaded successfully|taken care of)\b/i.test(content);
     const isQuestion = /\?\s*$/.test(content) || /^(who|what|when|where|why|how|can|could|would|should|does|do|did|is|are|has|have|will)\b/i.test(content);
+    // Polite requests phrased as questions are tasks, not unanswered discussion questions.
+    const isRequest = /^(?:can|could|would|will)\s+(?:you|someone|anyone|we)\b/i.test(content) ||
+      /\b(?:can|could you|please)\b.*\b(send|share|upload|prepare|review|confirm|check|finish|submit|call|meet|update|create|bring)\b/i.test(content);
     const isAction = actionWords.test(content);
-    if (isQuestion && openQuestions.length < 8) {
+    if (isQuestion && !isRequest && openQuestions.length < 8) {
       openQuestions.push({ title: content.length > 90 ? content.slice(0, 87) + "..." : content, detail: content, source: line, sender, status: "Needs an answer" });
     }
-    if (isAction && !isCompleted && !isQuestion && items.length < 8) {
+    if (isAction && !isCompleted && (!isQuestion || isRequest) && items.length < 8) {
       const urgent = /\b(urgent|asap|immediately|critical|overdue)\b/i.test(content);
       items.push({
         title: content.length > 90 ? content.slice(0, 87) + "..." : content,
