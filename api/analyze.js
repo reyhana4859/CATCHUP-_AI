@@ -43,11 +43,20 @@ function analyzeLocally(text) {
       const decisionKey = content.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
       if (!seenDecisions.has(decisionKey)) {
         seenDecisions.add(decisionKey);
+        const kind = /\b(meet|meeting|tomorrow|monday|tuesday|wednesday|thursday|friday|at \d|moved to|changed to|correction|actually)\b/i.test(content) ? "Schedule update" : /\b(i will|i'll|i can handle|owner is)\b/i.test(content) ? "Ownership" : "Decision";
+        // If a later message updates the same named event, keep the latest schedule statement.
+        const eventWords = ["demo", "review", "meeting", "submission", "presentation", "interview", "call", "deadline", "class", "exam"];
+        const eventKey = eventWords.find(word => new RegExp("\\b" + word + "\\b", "i").test(content));
+        if (kind === "Schedule update" && eventKey) {
+          for (let j = decisions.length - 1; j >= 0; j--) {
+            if (decisions[j].kind === "Schedule update" && new RegExp("\\b" + eventKey + "\\b", "i").test(decisions[j].detail)) decisions.splice(j, 1);
+          }
+        }
         decisions.push({
           title: content.length > 90 ? content.slice(0, 87) + "..." : content,
           detail: content,
           source: line,
-          kind: /\b(meet|meeting|tomorrow|monday|tuesday|wednesday|thursday|friday|at \d|moved to|changed to)\b/i.test(content) ? "Schedule update" : /\b(i will|i'll|i can handle|owner is)\b/i.test(content) ? "Ownership" : "Decision"
+          kind
         });
       }
     }
