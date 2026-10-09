@@ -16,14 +16,28 @@ export default async function (req, res) {
   try {
     if (action === "save") {
       const briefing = body.briefing;
-      if (!briefing || typeof briefing !== "object" || !Array.isArray(briefing.items) || !Array.isArray(briefing.decisions)) {
+      if (!briefing || typeof briefing !== "object" || Array.isArray(briefing) ||
+          !Array.isArray(briefing.items) || !Array.isArray(briefing.decisions) ||
+          !Array.isArray(briefing.topics)) {
         return res.status(400).json({ error: "A valid briefing is required." });
+      }
+      if (briefing.items.length > 100 || briefing.decisions.length > 100 || briefing.topics.length > 100) {
+        return res.status(413).json({ error: "This briefing contains too many extracted items." });
+      }
+      let serialized;
+      try {
+        serialized = JSON.stringify(briefing);
+      } catch {
+        return res.status(400).json({ error: "The briefing must be valid JSON data." });
+      }
+      if (typeof serialized !== "string" || serialized.length > 200000) {
+        return res.status(413).json({ error: "This briefing is too large to save." });
       }
       const title = String(body.title || "Conversation briefing").slice(0, 120);
       const recap = String(briefing.recap || "").slice(0, 2000);
       const result = await db.query(
         "INSERT INTO saved_briefings (owner_key, title, recap, briefing) VALUES ($1, $2, $3, $4::jsonb) RETURNING id, title, recap, created_at",
-        [ownerKey, title, recap, JSON.stringify(briefing)]
+        [ownerKey, title, recap, serialized]
       );
       return res.status(201).json({ saved: result.rows[0] });
     }
