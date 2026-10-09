@@ -61,14 +61,11 @@ function normalizeAI(data,text){
  return {items:data.items.map((x,i)=>({id:"ai-"+i,title:String(x.title||"Review message"),detail:String(x.detail||x.title||""),source:String(x.source||""),sender:String(x.sender||"Conversation"),deadline:String(x.deadline||"Not stated"),score:Math.max(0,Math.min(1,Number(x.score)||.5)),priority:String(x.priority||"Action"),done:false})),decisions:Array.isArray(data.decisions)?data.decisions.map(x=>({title:String(x.title||"Decision"),detail:String(x.detail||""),source:String(x.source||""),kind:String(x.kind||"Decision")})):[],topics:Array.isArray(data.topics)?data.topics:[],recap:String(data.recap||"Your conversation has been summarized."),source:text,mode:"ai"};
 }
 async function analyze(text){
- const fallback=localAnalyze(text);
- try{
-  const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})});
-  if(!res.ok) throw new Error("AI unavailable");
-  const data=await res.json();
-  if(data&&data.result) return normalizeAI(data.result,text);
- }catch(e){console.info("Using browser-side fallback:",e.message);}
- return fallback;
+ const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})});
+ const data=await res.json().catch(()=>({error:"The server returned an unreadable response."}));
+ if(!res.ok) throw new Error(data.error||"AI analysis failed. Please try again.");
+ if(!data||!data.result) throw new Error("The AI response was incomplete. Please try again.");
+ return normalizeAI(data.result,text);
 }
 function renderPriority(item,index){
  const icon=item.done?"✓":(item.priority==="Urgent"?"!":item.priority==="Review"?"?":"↗");
@@ -98,14 +95,14 @@ function setView(view){
  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
 }
 function loadData(data){state.items=data.items;state.decisions=data.decisions;state.topics=data.topics;state.recap=data.recap;state.source=data.source;render();setView("briefing");$("import-panel").classList.add("hidden");$("hero-title").innerHTML='Your day, <em>back in focus.</em>';}
-$("load-sample").addEventListener("click",async()=>{state=Object.assign(state,localAnalyze(sampleChat));render();setView("briefing");$("hero-title").innerHTML='Your day, <em>back in focus.</em>';});
+$("load-sample").addEventListener("click",()=>{$("import-panel").classList.remove("hidden");$("conversation-input").focus();});
 $("toggle-import").addEventListener("click",()=>{$("import-panel").classList.toggle("hidden");$("conversation-input").focus()});
 $("close-import").addEventListener("click",()=>$("import-panel").classList.add("hidden"));
 $("clear-input").addEventListener("click",()=>{$("conversation-input").value="";$("char-count").textContent="0 characters";});
 $("conversation-input").addEventListener("input",()=>{$("char-count").textContent=$("conversation-input").value.length.toLocaleString()+" characters";});
-$("analyze-btn").addEventListener("click",async()=>{const text=$("conversation-input").value.trim();if(!text){$("conversation-input").focus();return;}if(text.length>50000){alert("Please keep the demo import under 50,000 characters.");return;}const btn=$("analyze-btn");btn.disabled=true;btn.textContent="Analyzing…";try{loadData(await analyze(text));}finally{btn.disabled=false;btn.innerHTML='Generate briefing <span>→</span>';}});
+$("analyze-btn").addEventListener("click",async()=>{const text=$("conversation-input").value.trim();if(!text){$("conversation-input").focus();return;}if(text.length>50000){alert("Please keep the demo import under 50,000 characters.");return;}const btn=$("analyze-btn");btn.disabled=true;btn.textContent="Analyzing…";try{loadData(await analyze(text));}catch(err){alert(err.message||"Analysis failed. Please try again.");}finally{btn.disabled=false;btn.innerHTML='Generate briefing <span>→</span>';}});
 document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>setView(b.dataset.view)));
 document.querySelectorAll("[data-filter]").forEach(b=>b.addEventListener("click",()=>{state.filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x===b));render();}));
 $("copy-recap").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(state.recap);$("copy-recap").innerHTML="Copied ✓";setTimeout(()=>{$("copy-recap").innerHTML='Copy recap <span>↗</span>'},1500);}catch(e){alert(state.recap);}});
-$("reset-btn").addEventListener("click",()=>{state=Object.assign(state,localAnalyze(sampleChat));$("conversation-input").value="";render();setView("briefing");});
-state=Object.assign(state,localAnalyze(sampleChat));render();setView("briefing");
+$("reset-btn").addEventListener("click",()=>{state={items:[],decisions:[],topics:[],recap:"Paste a conversation to generate a source-backed briefing.",source:"",view:"briefing",filter:"all",sourceOpen:-1};$("conversation-input").value="";render();setView("briefing");});
+state={items:[],decisions:[],topics:[],recap:"Paste a conversation to generate a source-backed briefing.",source:"",view:"briefing",filter:"all",sourceOpen:-1};render();setView("briefing");
