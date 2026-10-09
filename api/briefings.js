@@ -3,8 +3,13 @@ import { db } from "hatchable";
 export const access = "public";
 export const methods = ["POST"];
 
+function validUuid(value) {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function validOwnerKey(value) {
-  return typeof value === "string" && /^[a-f0-9-]{36}$/i.test(value);
+  return validUuid(value);
 }
 
 export default async function (req, res) {
@@ -51,7 +56,8 @@ export default async function (req, res) {
     }
 
     if (action === "get") {
-      const id = String(body.id || "");
+      const id = body.id;
+      if (!validUuid(id)) return res.status(400).json({ error: "A valid briefing ID is required." });
       const result = await db.query(
         "SELECT id, title, recap, briefing, created_at FROM saved_briefings WHERE owner_key = $1 AND id = $2 LIMIT 1",
         [ownerKey, id]
@@ -61,7 +67,8 @@ export default async function (req, res) {
     }
 
     if (action === "delete") {
-      const id = String(body.id || "");
+      const id = body.id;
+      if (!validUuid(id)) return res.status(400).json({ error: "A valid briefing ID is required." });
       await db.query(
         "DELETE FROM saved_briefings WHERE owner_key = $1 AND id = $2",
         [ownerKey, id]
