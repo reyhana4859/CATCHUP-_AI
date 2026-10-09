@@ -24,10 +24,12 @@ function analyzeLocally(text) {
     const isRequest = /^(?:can|could|would|will)\s+(?:you|someone|anyone|we)\b/i.test(content) ||
       /\b(?:can|could you|please)\b.*\b(send|share|upload|prepare|review|confirm|check|finish|submit|call|meet|update|create|bring)\b/i.test(content);
     const isAction = actionWords.test(content);
+    // Avoid treating tentative discussion and proposals as committed work or decisions.
+    const isTentative = /\b(let's discuss|lets discuss|i suggest|we should consider|consider whether|might move|maybe move|proposed)\b/i.test(content);
     if (isQuestion && !isRequest && openQuestions.length < 8) {
       openQuestions.push({ title: content.length > 90 ? content.slice(0, 87) + "..." : content, detail: content, source: line, sender, status: "Needs an answer" });
     }
-    if (isAction && !isCompleted && (!isQuestion || isRequest) && items.length < 8) {
+    if (isAction && !isCompleted && !isTentative && (!isQuestion || isRequest) && items.length < 8) {
       const urgent = /\b(urgent|asap|immediately|critical|overdue)\b/i.test(content);
       items.push({
         title: content.length > 90 ? content.slice(0, 87) + "..." : content,
@@ -39,7 +41,7 @@ function analyzeLocally(text) {
         priority: urgent ? "Urgent" : hasDeadline ? "Action" : "Review"
       });
     }
-    if (decisionWords.test(content) && decisions.length < 6) {
+    if (decisionWords.test(content) && !isTentative && decisions.length < 6) {
       const decisionKey = content.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
       if (!seenDecisions.has(decisionKey)) {
         seenDecisions.add(decisionKey);
