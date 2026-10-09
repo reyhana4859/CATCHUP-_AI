@@ -48,11 +48,11 @@ export default async function (req, res) {
 
     if (action === "delete") {
       const id = String(body.id || "");
-      const result = await db.query(
+      await db.query(
         "DELETE FROM saved_briefings WHERE owner_key = $1 AND id = $2",
         [ownerKey, id]
       );
-      return res.json({ deleted: result.changes || 0 });
+      return res.json({ deleted: true });
     }
 
     return res.status(400).json({ error: "Unsupported action. Use save, list, get, or delete." });

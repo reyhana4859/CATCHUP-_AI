@@ -34,7 +34,7 @@ export default async function (req, res) {
     if (!Array.isArray(parsed.items)) return res.status(502).json({ error: "AI returned an invalid result." });
     return res.json({ result: parsed, mode: "ai" });
   } catch (err) {
-    console.log("CatchUp AI analysis unavailable; browser fallback will be used.", String(err && err.message || err));
+    console.log("CatchUp AI analysis unavailable.", String(err && err.message || err));
     return res.status(503).json({ error: "AI is not configured or temporarily unavailable." });
   }
 }
