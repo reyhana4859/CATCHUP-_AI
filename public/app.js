@@ -67,6 +67,9 @@ async function analyze(text){
  if(!data||!data.result) throw new Error("The AI response was incomplete. Please try again.");
  return normalizeAI(data.result,text);
 }
+function getOwnerKey(){let key=localStorage.getItem("catchup-owner-key");if(!key){key=crypto.randomUUID?crypto.randomUUID():"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==="x"?r:(r&3|8)).toString(16)});localStorage.setItem("catchup-owner-key",key);}return key;}
+async function savedApi(payload){const res=await fetch("/api/briefings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,ownerKey:getOwnerKey()})});const data=await res.json().catch(()=>({error:"Unreadable database response."}));if(!res.ok)throw new Error(data.error||"Database request failed.");return data;}
+async function refreshSaved(){const el=$("saved-list");el.innerHTML='<p class="quick-recap">Loading saved briefings…</p>';try{const data=await savedApi({action:"list"});el.innerHTML=data.briefings.length?data.briefings.map(x=>`<button class="topic-row saved-entry" data-saved-id="${escapeHtml(x.id)}" style="width:100%;text-align:left;border:0;cursor:pointer"><i class="topic-dot"></i><span>${escapeHtml(x.title)}</span><span>${new Date(x.created_at).toLocaleDateString()}</span></button>`).join(""):'<p class="quick-recap">No saved briefings yet. Analyze a conversation, then choose Save briefing.</p>';el.querySelectorAll("[data-saved-id]").forEach(b=>b.addEventListener("click",async()=>{try{const result=await savedApi({action:"get",id:b.dataset.savedId});loadData(result.saved.briefing);$("conversation-input").value="";}catch(err){alert(err.message||"Could not load that briefing.");}}));}catch(err){el.innerHTML='<p class="quick-recap">Database unavailable. Please refresh and try again.</p>';}}
 function renderPriority(item,index){
  const icon=item.done?"✓":(item.priority==="Urgent"?"!":item.priority==="Review"?"?":"↗");
  const cls=item.done?"completed":"";
@@ -75,7 +78,7 @@ function renderPriority(item,index){
 }
 function renderDecision(d){return `<article class="decision-card"><div class="decision-symbol">${d.kind==="Ownership"?"♧":d.kind==="Schedule update"?"◷":"◈"}</div><div><h3>${escapeHtml(d.title)}</h3><p>${escapeHtml(d.detail)}</p><div class="decision-source">↳ ${escapeHtml(d.source||"Source message")}</div></div></article>`;}
 function render(){
- const open=state.items.filter(x=>!x.done).length,urgent=state.items.filter(x=>!x.done&&x.priority==="Urgent").length;
+ const open=state.items.filter(x=>!x.done).length,urgent=state.items.filter(x=>!x.done&&x.priority==="Urgent").length;$("save-briefing").disabled=!state.source||!state.items.length;
  $("nav-task-count").textContent=open;$("stat-priority").textContent=urgent||open;$("stat-decisions").textContent=state.decisions.length;
  $("metric-priority").innerHTML=String(urgent||open).padStart(2,"0")+' <small>items</small>';$("metric-decisions").innerHTML=String(state.decisions.length).padStart(2,"0")+' <small>decisions</small>';$("metric-tasks").innerHTML=String(open).padStart(2,"0")+' <small>to-dos</small>';
  $("urgent-count").textContent=urgent||open;$("metric-noise").innerHTML=state.source.length>100?"Filtered <small>signal found</small>":"Low <small>signal found</small>";
@@ -104,5 +107,7 @@ $("analyze-btn").addEventListener("click",async()=>{const text=$("conversation-i
 document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>setView(b.dataset.view)));
 document.querySelectorAll("[data-filter]").forEach(b=>b.addEventListener("click",()=>{state.filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x===b));render();}));
 $("copy-recap").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(state.recap);$("copy-recap").innerHTML="Copied ✓";setTimeout(()=>{$("copy-recap").innerHTML='Copy recap <span>↗</span>'},1500);}catch(e){alert(state.recap);}});
+$("save-briefing").addEventListener("click",async()=>{if(!state.source||!state.items.length)return;const btn=$("save-briefing");btn.disabled=true;btn.textContent="Saving…";try{await savedApi({action:"save",title:"Briefing · "+new Date().toLocaleString(),briefing:{items:state.items,decisions:state.decisions,topics:state.topics,recap:state.recap,source:state.source,mode:state.mode||"ai"}});btn.innerHTML="Saved ✓";await refreshSaved();}catch(err){alert(err.message||"Could not save briefing.");}finally{btn.disabled=!state.source||!state.items.length;setTimeout(()=>{btn.innerHTML='Save briefing <span>＋</span>'},1800);}});
+$("refresh-saved").addEventListener("click",refreshSaved);
 $("reset-btn").addEventListener("click",()=>{state={items:[],decisions:[],topics:[],recap:"Paste a conversation to generate a source-backed briefing.",source:"",view:"briefing",filter:"all",sourceOpen:-1};$("conversation-input").value="";render();setView("briefing");});
-state={items:[],decisions:[],topics:[],recap:"Paste a conversation to generate a source-backed briefing.",source:"",view:"briefing",filter:"all",sourceOpen:-1};render();setView("briefing");
+state={items:[],decisions:[],topics:[],recap:"Paste a conversation to generate a source-backed briefing.",source:"",view:"briefing",filter:"all",sourceOpen:-1};render();setView("briefing");refreshSaved();
